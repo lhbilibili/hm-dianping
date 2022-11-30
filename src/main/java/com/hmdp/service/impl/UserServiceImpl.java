@@ -2,6 +2,7 @@ package com.hmdp.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.lang.UUID;
+import cn.hutool.core.util.RandomUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.dto.LoginFormDTO;
@@ -31,11 +32,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
     @Override
     public Result sendCode(String phone, HttpSession session) {
-        if (!RegexUtils.isPhoneInvalid(phone)) {
+        if (RegexUtils.isPhoneInvalid(phone)) {
             return Result.fail("手机号不正确");
         }
-        String code = CodeUtils.randomCode(6);
-        session.setAttribute(RedisConstants.LOGIN_CODE_KEY + phone, code);
+        String code = RandomUtil.randomNumbers(6);
+        session.setAttribute("code", code);
 
         log.debug("发送验证码成功, 验证码: {}", code);
 
@@ -45,7 +46,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     @Override
     public Result login(LoginFormDTO loginForm, HttpSession session) {
         String phone = loginForm.getPhone();
-        if (!RegexUtils.isPhoneInvalid(phone)) {
+        if (RegexUtils.isPhoneInvalid(phone)) {
             return Result.fail("手机号不正确");
         }
 
@@ -58,24 +59,20 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         } else if (!StringUtils.isEmpty(code)) {
             log.debug("--------------验证码登录-----------------");
 
-            String trueCode = (String) session.getAttribute(RedisConstants.LOGIN_CODE_KEY);
-            if (StringUtils.isEmpty(trueCode)) {
-                return Result.fail("请先发送验证码");
-            } else if (!trueCode.equals(code)) {
+            Object cacheCode = session.getAttribute("code");
+            if (StringUtils.isEmpty(cacheCode) || !cacheCode.toString().equals(code)) {
                 return Result.fail("验证码错误");
-            } else {
-                User user = this.lambdaQuery().eq(User::getPhone, phone).one();
-                if (user == null) {
-                    user = createUserWithPhone(phone);
-                }
-                
-                // 保存用户信息到session中
-                String token = UUID.randomUUID().toString(true);
-                UserDTO userDTO = BeanUtil.copyProperties(user, UserDTO.class);
-
-
-                return Result.ok();
             }
+
+            User user = this.lambdaQuery().eq(User::getPhone, phone).one();
+
+            if (user == null) {
+                user = createUserWithPhone(phone);
+            }
+
+            session.setAttribute("user", BeanUtil.copyProperties(user, UserDTO.class));
+
+            return Result.ok();
 
         } else {
             log.debug("--------------密码登录-----------------");
@@ -104,7 +101,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     private User createUserWithPhone(String phone) {
         User user = new User();
         user.setPhone(phone);
-        user.setNickName(SystemConstants.USER_NICK_NAME_PREFIX + CodeUtils.randomCode(10));
+        user.setNickName(SystemConstants.USER_NICK_NAME_PREFIX + RandomUtil.randomString(10));
         this.save(user);
         return user;
     }
