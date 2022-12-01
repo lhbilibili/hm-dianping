@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * <p>
- * 登录拦截器
+ * 刷新拦截器 拦截一切
  * </p>
  *
  * @author lh

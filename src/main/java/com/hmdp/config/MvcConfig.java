@@ -11,7 +11,7 @@ import javax.annotation.Resource;
 
 /**
  * <p>
- *
+ *  web应用配置
  * </p>
  *
  * @author lh
