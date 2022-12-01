@@ -12,4 +12,10 @@ class HmDianPingApplicationTests {
         System.out.println(PasswordEncoder.encode("1234"));
     }
 
+    @Test
+    void testDigit() {
+        System.out.println((int) 'a');
+
+    }
+
 }
