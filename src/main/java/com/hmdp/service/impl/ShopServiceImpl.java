@@ -1,5 +1,6 @@
 package com.hmdp.service.impl;
 
+import cn.hutool.core.util.BooleanUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.hmdp.dto.Result;
@@ -39,8 +40,59 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     @Override
     public Result queryById(Long id) {
         // 缓存穿透
-        Shop shop = queryWithPassThrough(id);
+        // Shop shop = queryWithPassThrough(id);
+
+        // 解决缓存击穿
+        Shop shop = queryWithMutex(id);
+
+        if (shop == null) {
+            return Result.fail("服务器异常");
+        }
         return Result.ok(shop);
+    }
+
+    private Shop queryWithMutex(Long id) {
+        String shopKey = RedisConstants.CACHE_SHOP_KEY + id;
+        // 查询redis
+        String shopJson = stringRedisTemplate.opsForValue().get(shopKey);
+        if (StrUtil.isNotBlank(shopJson)) {
+            return JSONUtil.toBean(shopJson, Shop.class);
+        }
+        // 检测到空缓存
+        if (shopJson != null) {
+            return null;
+        }
+
+        // 缓存未命中
+        String lockKey = RedisConstants.LOCK_SHOP_KEY + id;
+        Shop shop = null;
+        try {
+            // 尝试获取锁
+            if (!tryLock(lockKey)) {
+                // 获取锁失败
+                Thread.sleep(50);
+                return queryWithMutex(id);
+            }
+
+            // 获取锁成功，查询数据库
+            shop = this.getById(id);
+            Thread.sleep(200); // 做测试用
+
+            // 存入空缓存
+            if (shop == null) {
+                stringRedisTemplate.opsForValue().set(shopKey, "", RedisConstants.CACHE_NULL_TTL, TimeUnit.MINUTES);
+                return null;
+            }
+            // 查询结果存入redis中
+            stringRedisTemplate.opsForValue().set(shopKey, JSONUtil.toJsonStr(shop), RedisConstants.CACHE_SHOP_TTL, TimeUnit.MINUTES);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } finally {
+            // 释放锁
+            unLock(lockKey);
+        }
+
+        return shop;
     }
 
     /**
@@ -72,6 +124,25 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         // 查询结果存入redis中
         stringRedisTemplate.opsForValue().set(shopKey, JSONUtil.toJsonStr(shop), RedisConstants.CACHE_SHOP_TTL, TimeUnit.MINUTES);
         return shop;
+    }
+
+    /**
+     * 利用redis的setnx方法实现一个锁
+     * @param key lock的key
+     * @return 是否获取到锁
+     */
+    private boolean tryLock(String key) {
+        Boolean flag = stringRedisTemplate.opsForValue().setIfAbsent(key, "1");
+
+        return BooleanUtil.isTrue(flag);
+    }
+
+    /**
+     * 解锁
+     * @param key 需要解锁lock的key
+     */
+    private void unLock(String key) {
+        stringRedisTemplate.delete(key);
     }
 
     /**
