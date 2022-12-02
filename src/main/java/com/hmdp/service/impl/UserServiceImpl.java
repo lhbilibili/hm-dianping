@@ -99,11 +99,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             return Result.ok(token);
 
         } else {
+            // TODO 功能不完善
             log.debug("--------------密码登录-----------------");
 
-            LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
-            queryWrapper.eq(User::getPhone, phone);
-            User user = this.getOne(queryWrapper);
+            User user = this.lambdaQuery().eq(User::getPhone, phone).one();
             if (PasswordEncoder.matches(user.getPassword(), password)) {
                 return Result.ok();
             } else {
