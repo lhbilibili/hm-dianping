@@ -74,7 +74,17 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
                 return queryWithMutex(id);
             }
 
-            // 获取锁成功，查询数据库
+            // 获取锁成功，做Double Check
+            String doubleCheckShopJson = stringRedisTemplate.opsForValue().get(shopKey);
+            if (StrUtil.isNotBlank(doubleCheckShopJson)) {
+                return JSONUtil.toBean(doubleCheckShopJson, Shop.class);
+            }
+            // 还需要判断是否为空缓存
+            if (doubleCheckShopJson != null) {
+                return null;
+            }
+
+            // doubleCheck的缓存未命中再查询数据库
             shop = this.getById(id);
             Thread.sleep(200); // 做测试用
 
