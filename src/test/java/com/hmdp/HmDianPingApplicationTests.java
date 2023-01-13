@@ -1,7 +1,9 @@
 package com.hmdp;
 
+import com.hmdp.dto.Result;
 import com.hmdp.service.IShopService;
 import com.hmdp.service.impl.ShopServiceImpl;
+import com.hmdp.service.impl.VoucherOrderServiceImpl;
 import com.hmdp.utils.PasswordEncoder;
 import com.hmdp.utils.RedisIdWorker;
 import org.junit.jupiter.api.Test;
@@ -58,6 +60,16 @@ class HmDianPingApplicationTests {
         latch.await();
         long end = System.currentTimeMillis();
         System.out.println("time = " + (end - start));
+    }
+
+    @Resource
+    private VoucherOrderServiceImpl voucherOrderService;
+
+    @Test
+    public void testVoucherOrder() {
+        Result result = voucherOrderService.voucherOrder(3L);
+
+        System.out.println(result);
     }
 
 }
