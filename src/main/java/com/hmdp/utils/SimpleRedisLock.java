@@ -13,6 +13,7 @@ public class SimpleRedisLock implements ILock {
     private String name;
     private StringRedisTemplate stringRedisTemplate;
     private static final String KEY_PREFIX = "lock:";
+    private static final String ID_PREFIX = "UUID_";
 
     public SimpleRedisLock(String name, StringRedisTemplate stringRedisTemplate) {
         this.name = name;
@@ -22,15 +23,21 @@ public class SimpleRedisLock implements ILock {
     @Override
     public boolean tryLock(long timeoutSec) {
         String key = KEY_PREFIX + name;
-        String value = String.valueOf(Thread.currentThread().getId());
-        Boolean res = stringRedisTemplate.opsForValue().setIfAbsent(key, value, timeoutSec, TimeUnit.SECONDS);
+        String threadId = ID_PREFIX + Thread.currentThread().getId();
+        Boolean res = stringRedisTemplate.opsForValue().setIfAbsent(key, threadId, timeoutSec, TimeUnit.SECONDS);
 
         return Boolean.TRUE.equals(res);
     }
 
     @Override
     public void unLock() {
+        String threadId = ID_PREFIX + Thread.currentThread().getId();
         String key = KEY_PREFIX + name;
-        stringRedisTemplate.delete(key);
+
+        String val = stringRedisTemplate.opsForValue().get(key);
+
+        if (threadId.equals(val)) {
+            stringRedisTemplate.delete(key);
+        }
     }
 }
