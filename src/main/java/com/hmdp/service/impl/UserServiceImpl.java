@@ -121,7 +121,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         return null;
     }
 
-    private User createUserWithPhone(String phone) {
+    public User createUserWithPhone(String phone) {
         User user = new User();
         user.setPhone(phone);
         user.setNickName(SystemConstants.USER_NICK_NAME_PREFIX + RandomUtil.randomString(10));

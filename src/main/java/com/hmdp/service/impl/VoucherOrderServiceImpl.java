@@ -47,6 +47,8 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     // 创建订单的lua脚本
     private static final DefaultRedisScript<Long> SECKILL_SCRIPT;
 
+    private IVoucherOrderService proxy;
+
     static {
         SECKILL_SCRIPT = new DefaultRedisScript<>();
         SECKILL_SCRIPT.setLocation(new ClassPathResource("lua/voucherOrder.lua"));
@@ -76,11 +78,11 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
      */
     private BlockingQueue<VoucherOrder> orderTasks = new ArrayBlockingQueue<>(1024 * 1024);
 
-    private class VoucherOrderHandler implements Runnable{
+    private class VoucherOrderHandler implements Runnable {
 
         @Override
         public void run() {
-            while (true){
+            while (true) {
                 try {
                     // 1.获取队列中的订单信息
                     VoucherOrder voucherOrder = orderTasks.take();
@@ -89,6 +91,22 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                 } catch (Exception e) {
                     log.error("处理订单异常", e);
                 }
+            }
+        }
+
+        public void handlerVoucherOrder(VoucherOrder voucherOrder) {
+            RLock lock = redissonClient.getLock("lock:order:" + voucherOrder.getUserId());
+            boolean isLock = lock.tryLock();
+            if (!isLock) {
+                log.error("不可重复下单");
+                return;
+            }
+
+            try {
+                // 获取事务的代理对象
+                proxy.createVoucherOrder(voucherOrder);
+            } finally {
+                lock.unlock();
             }
         }
     }
@@ -111,6 +129,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             return Result.fail(r == 1 ? "库存不足" : "不能重复下单");
         }
         // TODO 保存阻塞队列
+        proxy = (IVoucherOrderService) AopContext.currentProxy();
         VoucherOrder voucherOrder = new VoucherOrder();
         voucherOrder.setUserId(userId);
         voucherOrder.setVoucherId(voucherId);
@@ -182,8 +201,6 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 //        }
 //
 //    }
-
-
 
 
 }

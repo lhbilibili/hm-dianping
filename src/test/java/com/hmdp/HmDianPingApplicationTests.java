@@ -4,6 +4,7 @@ import com.hmdp.dto.Result;
 import com.hmdp.service.IShopService;
 import com.hmdp.service.impl.ShopServiceImpl;
 import com.hmdp.service.impl.VoucherOrderServiceImpl;
+import com.hmdp.utils.MutilToken;
 import com.hmdp.utils.PasswordEncoder;
 import com.hmdp.utils.RedisIdWorker;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,7 @@ import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import javax.annotation.Resource;
 import java.util.concurrent.CountDownLatch;
@@ -90,6 +92,13 @@ class HmDianPingApplicationTests {
                 anyLock.unlock();
             }
         }
+    }
+
+    @Resource
+    private MutilToken mutilToken;
+    @Test
+    public void testMutilToken() {
+        mutilToken.createMutilToken();
     }
 
 }
