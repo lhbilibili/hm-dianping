@@ -1,5 +1,6 @@
 package com.hmdp.service.impl;
 
+import cn.hutool.core.bean.BeanUtil;
 import com.hmdp.dto.Result;
 import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.SeckillVoucher;
@@ -19,6 +20,7 @@ import org.springframework.aop.framework.AopContext;
 import org.springframework.aop.framework.AopProxy;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.data.redis.connection.stream.*;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.script.RedisScript;
@@ -27,8 +29,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
@@ -79,15 +84,60 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     private BlockingQueue<VoucherOrder> orderTasks = new ArrayBlockingQueue<>(1024 * 1024);
 
     private class VoucherOrderHandler implements Runnable {
+        String streamName = "stream.orders";
 
         @Override
         public void run() {
             while (true) {
                 try {
                     // 1.获取队列中的订单信息
-                    VoucherOrder voucherOrder = orderTasks.take();
+                    List<MapRecord<String, Object, Object>> list = stringRedisTemplate.opsForStream().read(
+                            Consumer.from("g1", "c1"),
+                            StreamReadOptions.empty().count(1).block(Duration.ofSeconds(2)),
+                            StreamOffset.create(streamName, ReadOffset.lastConsumed())
+                    );
+
+                    if (list == null || list.isEmpty()) {
+                        continue;
+                    }
+
+                    MapRecord<String, Object, Object> record = list.get(0);
+                    Map<Object, Object> value = record.getValue();
+                    VoucherOrder voucherOrder = BeanUtil.fillBeanWithMap(value, new VoucherOrder(), true);
                     // 2.创建订单
-                    createVoucherOrder(voucherOrder);
+                    handlerVoucherOrder(voucherOrder);
+
+                    // 3.ACK确认
+                    stringRedisTemplate.opsForStream().acknowledge(streamName, "g1", record.getId());
+                } catch (Exception e) {
+                    log.error("处理订单异常", e);
+                    handlerPendingList();
+                }
+            }
+        }
+
+        public void handlerPendingList() {
+            while (true) {
+                try {
+                    // 1.获取队列中的订单信息
+                    List<MapRecord<String, Object, Object>> list = stringRedisTemplate.opsForStream().read(
+                            Consumer.from("g1", "c1"),
+                            StreamReadOptions.empty().count(1).block(Duration.ofSeconds(2)),
+                            StreamOffset.create(streamName, ReadOffset.from("0"))
+                    );
+
+                    if (list == null || list.isEmpty()) {
+                        break;
+                    }
+
+                    MapRecord<String, Object, Object> record = list.get(0);
+                    Map<Object, Object> value = record.getValue();
+                    VoucherOrder voucherOrder = BeanUtil.fillBeanWithMap(value, new VoucherOrder(), true);
+                    // 2.创建订单
+                    handlerVoucherOrder(voucherOrder);
+
+                    // 3.ACK确认
+                    stringRedisTemplate.opsForStream().acknowledge(streamName, "g1", record.getId());
                 } catch (Exception e) {
                     log.error("处理订单异常", e);
                 }
@@ -130,11 +180,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         }
         // TODO 保存阻塞队列
         proxy = (IVoucherOrderService) AopContext.currentProxy();
-        VoucherOrder voucherOrder = new VoucherOrder();
-        voucherOrder.setUserId(userId);
-        voucherOrder.setVoucherId(voucherId);
-        voucherOrder.setId(orderId);
-        orderTasks.add(voucherOrder);
+
 
         return Result.ok(orderId);
     }
