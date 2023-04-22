@@ -20,6 +20,9 @@ public class UploadController {
     @PostMapping("blog")
     public Result uploadImage(@RequestParam("file") MultipartFile image) {
         try {
+            if (image == null || image.isEmpty()) {
+                return Result.ok("取消操作");
+            }
             // 获取原始文件名称
             String originalFilename = image.getOriginalFilename();
             // 生成新文件名
@@ -36,7 +39,7 @@ public class UploadController {
 
     @GetMapping("/blog/delete")
     public Result deleteBlogImg(@RequestParam("name") String filename) {
-        File file = new File(SystemConstants.IMAGE_UPLOAD_DIR, filename);
+        File file = new File(SystemConstants.IMAGE_DELETE_DIR, filename);
         if (file.isDirectory()) {
             return Result.fail("错误的文件名称");
         }

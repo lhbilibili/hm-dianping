@@ -34,6 +34,12 @@ public class BlogController {
 
     @PostMapping
     public Result saveBlog(@RequestBody Blog blog) {
+        if ("".equals(blog.getImages())) {
+            return Result.fail("照片不能为空");
+        }
+        if (blog.getShopId() == null) {
+            return Result.fail("需要绑定商家");
+        }
         // 获取登录用户
         UserDTO user = UserHolder.getUser();
         blog.setUserId(user.getId());
