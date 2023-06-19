@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 import java.util.HashMap;
 import java.util.Map;
@@ -119,6 +120,15 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     @Override
     public Result signCount() {
         return null;
+    }
+
+    @Override
+    public Result logout(HttpServletRequest request) {
+        String token = request.getHeader("authorization");
+        String tokenKey = RedisConstants.LOGIN_USER_KEY + token;
+
+        stringRedisTemplate.delete(tokenKey);
+        return Result.ok();
     }
 
     public User createUserWithPhone(String phone) {
